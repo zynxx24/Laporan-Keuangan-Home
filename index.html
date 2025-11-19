@@ -1,0 +1,611 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Monitor Arus Uang Masuk</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <style>
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes slideIn {
+            from { opacity: 0; transform: translateX(-20px); }
+            to { opacity: 1; transform: translateX(0); }
+        }
+        .fade-in { animation: fadeIn 0.5s ease-out; }
+        .slide-in { animation: slideIn 0.4s ease-out; }
+        .card-hover { transition: all 0.3s ease; }
+        .card-hover:hover { transform: translateY(-2px); box-shadow: 0 10px 25px rgba(0,0,0,0.1); }
+        
+        .chain-block {
+            position: relative;
+            transition: all 0.3s ease;
+        }
+        .chain-block:hover {
+            transform: scale(1.05);
+            z-index: 10;
+        }
+        .chain-connector {
+            position: absolute;
+            top: 50%;
+            right: -20px;
+            width: 20px;
+            height: 2px;
+            background: linear-gradient(90deg, currentColor 0%, transparent 100%);
+        }
+    </style>
+</head>
+<body class="bg-gradient-to-br from-blue-50 to-indigo-100 min-h-screen">
+    <div class="container mx-auto px-4 py-8">
+        <!-- Header -->
+        <div class="mb-8 fade-in">
+            <h1 class="text-4xl font-bold text-gray-800 mb-2">💰 Monitor Arus Uang Masuk</h1>
+            <p class="text-gray-600">Pantau pemasukan Anda secara real-time dengan visualisasi lengkap</p>
+        </div>
+
+        <!-- Loading Section -->
+        <div id="loadingSection" class="bg-white rounded-xl shadow-lg p-8 mb-8 fade-in text-center">
+            <div class="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600 mb-4"></div>
+            <h2 class="text-xl font-semibold text-gray-800 mb-2">Memuat Data...</h2>
+            <p class="text-gray-600" id="loadingStatus">Mengunduh file Excel</p>
+        </div>
+
+        <!-- View Tabs -->
+        <div id="viewTabs" class="bg-white rounded-xl shadow-lg p-4 mb-6 hidden fade-in">
+            <div class="flex gap-2 flex-wrap">
+                <button onclick="switchView('overview')" id="btnOverview" class="px-6 py-2 rounded-lg font-medium transition-all duration-300 bg-indigo-600 text-white shadow-md">
+                    📊 Overview
+                </button>
+                <button onclick="switchView('quarterly')" id="btnQuarterly" class="px-6 py-2 rounded-lg font-medium transition-all duration-300 bg-gray-100 text-gray-700 hover:bg-gray-200">
+                    📅 Quarterly
+                </button>
+                <button onclick="switchView('monthly')" id="btnMonthly" class="px-6 py-2 rounded-lg font-medium transition-all duration-300 bg-gray-100 text-gray-700 hover:bg-gray-200">
+                    🔗 Monthly Chain
+                </button>
+                <button onclick="switchView('category')" id="btnCategory" class="px-6 py-2 rounded-lg font-medium transition-all duration-300 bg-gray-100 text-gray-700 hover:bg-gray-200">
+                    🏷️ By Category
+                </button>
+            </div>
+        </div>
+
+        <!-- Statistics Cards -->
+        <div id="statsSection" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8 hidden">
+            <div class="bg-white rounded-xl shadow-lg p-6 card-hover fade-in">
+                <div class="flex items-center justify-between mb-2">
+                    <h3 class="text-gray-600 text-sm font-medium">Total Pemasukan</h3>
+                    <span class="text-2xl">💵</span>
+                </div>
+                <p id="totalIncome" class="text-3xl font-bold text-green-600">Rp 0</p>
+                <p class="text-xs text-gray-500 mt-1">Total IN</p>
+            </div>
+            <div class="bg-white rounded-xl shadow-lg p-6 card-hover fade-in">
+                <div class="flex items-center justify-between mb-2">
+                    <h3 class="text-gray-600 text-sm font-medium">Total Pengeluaran</h3>
+                    <span class="text-2xl">💸</span>
+                </div>
+                <p id="totalExpense" class="text-3xl font-bold text-red-600">Rp 0</p>
+                <p class="text-xs text-gray-500 mt-1">Total CONST</p>
+            </div>
+            <div class="bg-white rounded-xl shadow-lg p-6 card-hover fade-in">
+                <div class="flex items-center justify-between mb-2">
+                    <h3 class="text-gray-600 text-sm font-medium">Net Income</h3>
+                    <span class="text-2xl">📊</span>
+                </div>
+                <p id="netIncome" class="text-3xl font-bold text-blue-600">Rp 0</p>
+                <p class="text-xs text-gray-500 mt-1">IN - CONST</p>
+            </div>
+            <div class="bg-white rounded-xl shadow-lg p-6 card-hover fade-in">
+                <div class="flex items-center justify-between mb-2">
+                    <h3 class="text-gray-600 text-sm font-medium">Jumlah Transaksi</h3>
+                    <span class="text-2xl">📈</span>
+                </div>
+                <p id="totalTransactions" class="text-3xl font-bold text-indigo-600">0</p>
+                <p class="text-xs text-gray-500 mt-1">Total records</p>
+            </div>
+        </div>
+
+        <!-- Overview View -->
+        <div id="overviewView">
+            <!-- Chart Section -->
+            <div id="chartSection" class="bg-white rounded-xl shadow-lg p-6 mb-8 hidden fade-in">
+                <h2 class="text-xl font-semibold mb-4 text-gray-800">📉 Trend Pemasukan</h2>
+                <canvas id="incomeChart"></canvas>
+            </div>
+
+            <!-- Data Table -->
+            <div id="tableSection" class="bg-white rounded-xl shadow-lg p-6 hidden fade-in">
+                <div class="flex justify-between items-center mb-4 flex-wrap gap-4">
+                    <h2 class="text-xl font-semibold text-gray-800">📋 Detail Transaksi</h2>
+                    <input type="text" id="searchInput" placeholder="Cari transaksi..." class="px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                </div>
+                <div class="overflow-x-auto">
+                    <table class="min-w-full">
+                        <thead class="bg-gray-50">
+                            <tr id="tableHeader"></tr>
+                        </thead>
+                        <tbody id="tableBody" class="divide-y divide-gray-200"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- Quarterly View -->
+        <div id="quarterlyView" class="hidden">
+            <div class="bg-white rounded-xl shadow-lg p-6 mb-8 fade-in">
+                <h2 class="text-2xl font-bold mb-6 text-gray-800">📅 Analisis Quarterly</h2>
+                <div id="quarterlyContent" class="space-y-6"></div>
+            </div>
+        </div>
+
+        <!-- Monthly Chain View -->
+        <div id="monthlyView" class="hidden">
+            <div class="bg-white rounded-xl shadow-lg p-6 mb-8 fade-in">
+                <h2 class="text-2xl font-bold mb-6 text-gray-800">🔗 Monthly Chain Flow</h2>
+                <div id="monthlyChainContent" class="overflow-x-auto pb-4"></div>
+            </div>
+        </div>
+
+        <!-- Category View -->
+        <div id="categoryView" class="hidden">
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+                <div class="bg-white rounded-xl shadow-lg p-6 fade-in">
+                    <h2 class="text-xl font-semibold mb-4 text-gray-800">🏷️ Breakdown by Category</h2>
+                    <canvas id="categoryChart"></canvas>
+                </div>
+                <div class="bg-white rounded-xl shadow-lg p-6 fade-in">
+                    <h2 class="text-xl font-semibold mb-4 text-gray-800">📊 Category Statistics</h2>
+                    <div id="categoryStats" class="space-y-3"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const FilePath = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vRWB5zaeYYR4clsPUlblN_KFQzcfrZ3kT37LY1AB-YfwPZzs5seUSkxxw7cQeRkZBEmLclgWsm7ZDB1/pub?output=xlsx';
+        
+        const SheetLogPengeluaran = 'LOG_PENGELUARAN';
+        const SheetChainMonth = 'CHAIN_MONTH';
+        const SheetFinal = 'FINAL';
+        
+        let logData = [];
+        let monthData = [];
+        let finalData = [];
+        let chart = null;
+        let categoryChart = null;
+        let currentView = 'overview';
+
+        function formatRupiah(amount) {
+            return new Intl.NumberFormat('id-ID', {
+                style: 'currency',
+                currency: 'IDR',
+                minimumFractionDigits: 0
+            }).format(amount);
+        }
+
+        function parseAmount(str) {
+            if (!str) return 0;
+            return parseFloat(str.toString().replace(/[^0-9.-]/g, '')) || 0;
+        }
+
+        function dateToJSDate(date) {
+            if (!date) return 'N/A';
+            // Handle string dates
+            if (typeof date === 'string' && date.includes('/')) return date;
+            // Handle Excel serial dates
+            if (typeof date === 'number') {
+                const excelEpoch = new Date(1899, 11, 30);
+                const convertedDate = new Date(excelEpoch.getTime() + date * 24 * 60 * 60 * 1000);
+                return convertedDate.toLocaleDateString('id-ID', { 
+                    day: '2-digit', 
+                    month: '2-digit', 
+                    year: 'numeric' 
+                });
+            }
+            return date;
+        }
+
+        function updateLoadingStatus(msg) {
+            document.getElementById('loadingStatus').textContent = msg;
+        }
+
+        async function loadSheetData() {
+            try {
+                updateLoadingStatus('Mengunduh file Excel...');
+                const response = await fetch(FilePath);
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP error! Status: ${response.status}`);
+                }
+
+                updateLoadingStatus('Memproses file...');
+                const arrayBuffer = await response.arrayBuffer();
+                const workbook = XLSX.read(new Uint8Array(arrayBuffer), { type: 'array' });
+
+                updateLoadingStatus('Memuat LOG_PENGELUARAN...');
+                const logSheet = workbook.Sheets[SheetLogPengeluaran];
+                if (logSheet) {
+                    logData = XLSX.utils.sheet_to_json(logSheet);
+                }
+
+                updateLoadingStatus('Memuat CHAIN_MONTH...');
+                const monthSheet = workbook.Sheets[SheetChainMonth];
+                if (monthSheet) {
+                    monthData = XLSX.utils.sheet_to_json(monthSheet);
+                }
+
+                updateLoadingStatus('Memuat FINAL...');
+                const finalSheet = workbook.Sheets[SheetFinal];
+                if (finalSheet) {
+                    finalData = XLSX.utils.sheet_to_json(finalSheet);
+                }
+
+                updateLoadingStatus('Menampilkan data...');
+                
+                return { logData, monthData, finalData };
+
+            } catch (error) {
+                console.error("Error loading sheet data:", error);
+                updateLoadingStatus(`Error: ${error.message}`);
+                return {
+                    logData: [{ NAME: "Loading Error", TYPE: "N/A", IN: 0, CONST: 0, NET: 0, TIME: "N/A" }],
+                    monthData: [],
+                    finalData: []
+                };
+            }
+        }
+
+        function switchView(view) {
+            currentView = view;
+            
+            // Update button states
+            ['btnOverview', 'btnQuarterly', 'btnMonthly', 'btnCategory'].forEach(id => {
+                const btn = document.getElementById(id);
+                btn.className = btn.className.replace('bg-indigo-600 text-white shadow-md', 'bg-gray-100 text-gray-700');
+            });
+            document.getElementById(`btn${view.charAt(0).toUpperCase() + view.slice(1)}`).className = 
+                'px-6 py-2 rounded-lg font-medium transition-all duration-300 bg-indigo-600 text-white shadow-md';
+
+            // Hide all views
+            ['overviewView', 'quarterlyView', 'monthlyView', 'categoryView'].forEach(id => {
+                document.getElementById(id).classList.add('hidden');
+            });
+
+            // Show selected view
+            document.getElementById(`${view}View`).classList.remove('hidden');
+
+            // Render view content
+            if (view === 'quarterly') renderQuarterlyView();
+            else if (view === 'monthly') renderMonthlyChain();
+            else if (view === 'category') renderCategoryView();
+        }
+
+        function renderQuarterlyView() {
+            const container = document.getElementById('quarterlyContent');
+            if (finalData.length === 0) {
+                container.innerHTML = '<p class="text-gray-500 text-center py-8">Tidak ada data quarterly tersedia</p>';
+                return;
+            }
+
+            let html = '';
+            finalData.forEach(row => {
+                const quarters = ['Q1', 'Q2', 'Q3', 'Q4'];
+                const year = row.YEAR;
+                
+                html += `<div class="mb-6"><h3 class="text-xl font-bold text-gray-700 mb-4">${year}</h3>
+                         <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">`;
+                
+                quarters.forEach(q => {
+                    const value = parseAmount(row[q]);
+                    const isNegative = value < 0;
+                    const colorClass = isNegative ? 'text-red-600 bg-red-50' : 'text-green-600 bg-green-50';
+                    
+                    html += `
+                        <div class="p-4 rounded-lg border-2 ${isNegative ? 'border-red-200' : 'border-green-200'} ${colorClass} card-hover">
+                            <div class="text-sm font-medium mb-1">${q} ${year}</div>
+                            <div class="text-2xl font-bold">${formatRupiah(value)}</div>
+                            <div class="text-xs mt-2">${isNegative ? '📉 Defisit' : '📈 Surplus'}</div>
+                        </div>
+                    `;
+                });
+                
+                html += '</div></div>';
+            });
+            
+            container.innerHTML = html;
+        }
+
+        function renderMonthlyChain() {
+            const container = document.getElementById('monthlyChainContent');
+            if (monthData.length === 0) {
+                container.innerHTML = '<p class="text-gray-500 text-center py-8">Tidak ada data monthly tersedia</p>';
+                return;
+            }
+
+            let html = '<div class="flex gap-6 items-center py-4" style="min-width: max-content;">';
+            
+            monthData.forEach((row, idx) => {
+                const totalNet = parseAmount(row.TOTAL_NET);
+                const totalIn = parseAmount(row.TOTAL_IN);
+                const totalConst = parseAmount(row.TOTAL_CONST);
+                const isNegative = totalNet < 0;
+                const bgClass = isNegative ? 'bg-gradient-to-br from-red-400 to-red-600' : 'bg-gradient-to-br from-green-400 to-green-600';
+                
+                html += `
+                    <div class="chain-block relative">
+                        <div class="${bgClass} text-white p-6 rounded-xl shadow-lg" style="min-width: 250px;">
+                            <div class="text-lg font-bold mb-3">${row.TIME || 'Month ' + (idx + 1)}</div>
+                            <div class="space-y-2 text-sm">
+                                <div class="flex justify-between">
+                                    <span>💰 IN:</span>
+                                    <span class="font-semibold">${formatRupiah(totalIn)}</span>
+                                </div>
+                                <div class="flex justify-between">
+                                    <span>💸 OUT:</span>
+                                    <span class="font-semibold">${formatRupiah(totalConst)}</span>
+                                </div>
+                                <div class="border-t border-white/30 pt-2 mt-2 flex justify-between">
+                                    <span>📊 NET:</span>
+                                    <span class="font-bold">${formatRupiah(totalNet)}</span>
+                                </div>
+                            </div>
+                        </div>
+                        ${idx < monthData.length - 1 ? `<div class="chain-connector" style="color: ${isNegative ? 'rgb(220, 38, 38)' : 'rgb(34, 197, 94)'}"></div>` : ''}
+                    </div>
+                `;
+            });
+            
+            html += '</div>';
+            container.innerHTML = html;
+        }
+
+        function renderCategoryView() {
+            if (logData.length === 0) return;
+
+            // Group by TYPE
+            const categoryData = {};
+            let totalConst = 0;
+            
+            logData.forEach(row => {
+                const type = row.TYPE || 'LAINNYA';
+                if (!categoryData[type]) {
+                    categoryData[type] = { in: 0, const: 0, net: 0, count: 0 };
+                }
+                categoryData[type].in += parseAmount(row.IN);
+                categoryData[type].const += parseAmount(row.CONST);
+                categoryData[type].net += parseAmount(row.NET);
+                categoryData[type].count++;
+                totalConst += parseAmount(row.CONST);
+            });
+
+            // Render pie chart with percentages
+            const ctx = document.getElementById('categoryChart').getContext('2d');
+            if (categoryChart) categoryChart.destroy();
+
+            const categories = Object.keys(categoryData);
+            const constValues = categories.map(c => categoryData[c].const);
+            
+            const colors = [
+                'rgb(239, 68, 68)', 'rgb(59, 130, 246)', 'rgb(34, 197, 94)',
+                'rgb(251, 191, 36)', 'rgb(168, 85, 247)', 'rgb(236, 72, 153)',
+                'rgb(20, 184, 166)', 'rgb(249, 115, 22)'
+            ];
+
+            categoryChart = new Chart(ctx, {
+                type: 'pie',
+                data: {
+                    labels: categories,
+                    datasets: [{
+                        data: constValues,
+                        backgroundColor: colors,
+                        borderWidth: 2,
+                        borderColor: '#fff'
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: {
+                        legend: { position: 'bottom' },
+                        tooltip: {
+                            callbacks: {
+                                label: (context) => {
+                                    const value = context.parsed;
+                                    const percentage = ((value / totalConst) * 100).toFixed(1);
+                                    return `${context.label}: ${formatRupiah(value)} (${percentage}%)`;
+                                }
+                            }
+                        },
+                        datalabels: {
+                            display: true,
+                            color: '#fff',
+                            font: { weight: 'bold', size: 14 },
+                            formatter: (value, context) => {
+                                const percentage = ((value / totalConst) * 100).toFixed(1);
+                                return percentage + '%';
+                            }
+                        }
+                    }
+                }
+            });
+
+            // Render stats with percentages
+            const statsContainer = document.getElementById('categoryStats');
+            let statsHtml = '';
+            
+            categories.forEach((cat, idx) => {
+                const data = categoryData[cat];
+                const percentage = ((data.const / totalConst) * 100).toFixed(1);
+                
+                statsHtml += `
+                    <div class="p-4 bg-gray-50 rounded-lg border-l-4 relative" style="border-color: ${colors[idx]}">
+                        <div class="absolute -top-3 -right-3 bg-white shadow-lg rounded-lg px-3 py-2 border-2" style="border-color: ${colors[idx]}">
+                            <div class="text-center">
+                                <div class="text-lg font-bold" style="color: ${colors[idx]}">${formatRupiah(data.const)}</div>
+                                <div class="text-xs font-semibold text-gray-600">${percentage}%</div>
+                            </div>
+                        </div>
+                        <div class="flex justify-between items-center mb-2 pr-24">
+                            <span class="font-semibold text-gray-700">${cat}</span>
+                            <span class="text-sm text-gray-500">${data.count} transaksi</span>
+                        </div>
+                        <div class="grid grid-cols-3 gap-2 text-sm">
+                            <div>
+                                <div class="text-xs text-gray-500">IN</div>
+                                <div class="font-semibold text-green-600">${formatRupiah(data.in)}</div>
+                            </div>
+                            <div>
+                                <div class="text-xs text-gray-500">OUT</div>
+                                <div class="font-semibold text-red-600">${formatRupiah(data.const)}</div>
+                            </div>
+                            <div>
+                                <div class="text-xs text-gray-500">NET</div>
+                                <div class="font-semibold text-blue-600">${formatRupiah(data.net)}</div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            });
+            
+            statsContainer.innerHTML = statsHtml;
+        }
+
+        function updateDashboard() {
+            document.getElementById('loadingSection').classList.add('hidden');
+            document.getElementById('viewTabs').classList.remove('hidden');
+            document.getElementById('statsSection').classList.remove('hidden');
+            document.getElementById('chartSection').classList.remove('hidden');
+            document.getElementById('tableSection').classList.remove('hidden');
+
+            const totalIn = logData.reduce((sum, row) => sum + parseAmount(row.IN), 0);
+            const totalConst = logData.reduce((sum, row) => sum + parseAmount(row.CONST), 0);
+            const totalNet = logData.reduce((sum, row) => sum + parseAmount(row.NET), 0);
+
+            document.getElementById('totalIncome').textContent = formatRupiah(totalIn);
+            document.getElementById('totalExpense').textContent = formatRupiah(totalConst);
+            document.getElementById('netIncome').textContent = formatRupiah(totalNet);
+            document.getElementById('totalTransactions').textContent = logData.length;
+
+            updateChart();
+            updateTable();
+        }
+
+        function updateChart() {
+            const ctx = document.getElementById('incomeChart').getContext('2d');
+            
+            let chartData = { labels: [], dataIn: [], dataNet: [] };
+
+            if (monthData.length > 0) {
+                monthData.forEach(row => {
+                    chartData.labels.push(row.TIME || 'Month');
+                    chartData.dataIn.push(parseAmount(row.TOTAL_IN));
+                    chartData.dataNet.push(parseAmount(row.TOTAL_NET));
+                });
+            } else if (logData.length > 0) {
+                const grouped = {};
+                logData.forEach(row => {
+                    const date = row.TIME || 'Unknown';
+                    if (!grouped[date]) grouped[date] = { in: 0, net: 0 };
+                    grouped[date].in += parseAmount(row.IN);
+                    grouped[date].net += parseAmount(row.NET);
+                });
+                chartData.labels = Object.keys(grouped);
+                chartData.dataIn = Object.values(grouped).map(v => v.in);
+                chartData.dataNet = Object.values(grouped).map(v => v.net);
+            }
+
+            if (chart) chart.destroy();
+
+            const datasets = [{
+                label: 'Pemasukan (IN)',
+                data: chartData.dataIn,
+                borderColor: 'rgb(34, 197, 94)',
+                backgroundColor: 'rgba(34, 197, 94, 0.1)',
+                tension: 0.4,
+                fill: true
+            }];
+
+            if (chartData.dataNet.length > 0) {
+                datasets.push({
+                    label: 'Net Income',
+                    data: chartData.dataNet,
+                    borderColor: 'rgb(59, 130, 246)',
+                    backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                    tension: 0.4,
+                    fill: true
+                });
+            }
+
+            chart = new Chart(ctx, {
+                type: 'line',
+                data: { labels: chartData.labels, datasets: datasets },
+                options: {
+                    responsive: true,
+                    plugins: {
+                        legend: { display: true, position: 'top' }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            ticks: { callback: value => formatRupiah(value) }
+                        }
+                    }
+                }
+            });
+        }
+
+        function updateTable() {
+            const headerRow = document.getElementById('tableHeader');
+            const tbody = document.getElementById('tableBody');
+
+            if (logData.length === 0) return;
+
+            const headers = Object.keys(logData[0]);
+
+            headerRow.innerHTML = headers.map(h => 
+                `<th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">${h}</th>`
+            ).join('');
+
+            tbody.innerHTML = logData.map((row) => `
+                <tr class="hover:bg-gray-50 transition duration-150">
+                    ${headers.map(h => {
+                        const val = row[h] || '';
+                        const isAmount = ['IN', 'CONST', 'NET'].includes(h);
+                        const isDate = h === 'TIME';
+                        const amountVal = parseAmount(val);
+                        const colorClass = h === 'IN' ? 'text-green-600' : 
+                                         h === 'CONST' ? 'text-red-600' : 
+                                         h === 'NET' ? 'text-blue-600' : 'text-gray-900';
+                        const displayVal = isAmount ? formatRupiah(amountVal) : 
+                                          isDate ? dateToJSDate(val) : val;
+                        return `<td class="px-6 py-4 whitespace-nowrap text-sm ${isAmount ? 'font-semibold ' + colorClass : 'text-gray-900'}">
+                            ${displayVal}
+                        </td>`;
+                    }).join('')}
+                </tr>
+            `).join('');
+        }
+
+        document.getElementById('searchInput').addEventListener('input', (e) => {
+            const search = e.target.value.toLowerCase();
+            const rows = document.querySelectorAll('#tableBody tr');
+            rows.forEach(row => {
+                const text = row.textContent.toLowerCase();
+                row.style.display = text.includes(search) ? '' : 'none';
+            });
+        });
+
+        window.addEventListener('DOMContentLoaded', async () => {
+            const data = await loadSheetData();
+            
+            if (data.logData && data.logData.length > 0) {
+                setTimeout(() => {
+                    updateDashboard();
+                }, 500);
+            }
+        });
+    </script>
+</body>
+</html>
