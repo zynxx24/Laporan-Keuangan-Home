@@ -88,7 +88,7 @@
                     <span class="text-2xl">💸</span>
                 </div>
                 <p id="totalExpense" class="text-3xl font-bold text-red-600">Rp 0</p>
-                <p class="text-xs text-gray-500 mt-1">Total CONST</p>
+                <p class="text-xs text-gray-500 mt-1">Total COST</p>
             </div>
             <div class="bg-white rounded-xl shadow-lg p-6 card-hover fade-in">
                 <div class="flex items-center justify-between mb-2">
@@ -96,7 +96,7 @@
                     <span class="text-2xl">📊</span>
                 </div>
                 <p id="netIncome" class="text-3xl font-bold text-blue-600">Rp 0</p>
-                <p class="text-xs text-gray-500 mt-1">IN - CONST</p>
+                <p class="text-xs text-gray-500 mt-1">IN - COST</p>
             </div>
             <div class="bg-white rounded-xl shadow-lg p-6 card-hover fade-in">
                 <div class="flex items-center justify-between mb-2">
@@ -112,7 +112,7 @@
         <div id="overviewView">
             <!-- Chart Section -->
             <div id="chartSection" class="bg-white rounded-xl shadow-lg p-6 mb-8 hidden fade-in">
-                <h2 class="text-xl font-semibold mb-4 text-gray-800">📉 Trend Pemasukan</h2>
+                <h2 class="text-xl font-semibold mb-4 text-gray-800">Index Keuangan</h2>
                 <canvas id="incomeChart"></canvas>
             </div>
 
@@ -251,7 +251,7 @@
                 console.error("Error loading sheet data:", error);
                 updateLoadingStatus(`Error: ${error.message}`);
                 return {
-                    logData: [{ NAME: "Loading Error", TYPE: "N/A", IN: 0, CONST: 0, NET: 0, TIME: "N/A" }],
+                    logData: [{ NAME: "Loading Error", TYPE: "N/A", IN: 0, COST: 0, NET: 0, TIME: "N/A" }],
                     monthData: [],
                     finalData: []
                 };
@@ -331,7 +331,7 @@
         monthData.forEach((row, idx) => {
             const totalNet = parseAmount(row.TOTAL_NET);
             const totalIn = parseAmount(row.TOTAL_IN);
-            const totalConst = parseAmount(row.TOTAL_CONST);
+            const totalConst = parseAmount(row.TOTAL_COST);
             const time = dateToJSDate(row.TIME || 'Month ' + (idx + 1));
             const isNegative = totalNet < 0;
             const bgClass = isNegative ? 'bg-gradient-to-br from-red-400 to-red-600' : 'bg-gradient-to-br from-green-400 to-green-600';
@@ -381,10 +381,10 @@
                     categoryData[type] = { in: 0, const: 0, net: 0, count: 0 };
                 }
                 categoryData[type].in += parseAmount(row.IN);
-                categoryData[type].const += parseAmount(row.CONST);
+                categoryData[type].const += parseAmount(row.COST);
                 categoryData[type].net += parseAmount(row.NET);
                 categoryData[type].count++;
-                totalConst += parseAmount(row.CONST);
+                totalConst += parseAmount(row.COST);
             });
 
             // Render pie chart with percentages
@@ -486,7 +486,7 @@
             document.getElementById('tableSection').classList.remove('hidden');
 
             const totalIn = logData.reduce((sum, row) => sum + parseAmount(row.IN), 0);
-            const totalConst = logData.reduce((sum, row) => sum + parseAmount(row.CONST), 0);
+            const totalConst = logData.reduce((sum, row) => sum + parseAmount(row.COST), 0);
             const totalNet = logData.reduce((sum, row) => sum + parseAmount(row.NET), 0);
 
             document.getElementById('totalIncome').textContent = formatRupiah(totalIn);
@@ -501,28 +501,33 @@
         function updateChart() {
             const ctx = document.getElementById('incomeChart').getContext('2d');
             
-            let chartData = { labels: [], dataIn: [], dataNet: [] };
-
-            // select month and year = mm/yyyy
-            const selectedMonthYear = monthData.length > 0 ? dateToJSDate(monthData[0].TIME).split('/').slice(1).join('/') : null;
+            let chartData = { labels: [], dataIn: [], dataNet: [], dataCost: [] };
 
             if (monthData.length > 0) {
                 monthData.forEach(row => {
+                    // time in format MM/YYYY
                     chartData.labels.push(dateToJSDate(row.TIME).split('/').slice(1).join('/') || 'Month');
+                    // Use TOTAL_IN and TOTAL_NET from CHAIN_MONTH
                     chartData.dataIn.push(parseAmount(row.TOTAL_IN));
+                    // Use TOTAL_NET from CHAIN_MONTH
                     chartData.dataNet.push(parseAmount(row.TOTAL_NET));
+                    // use TOTAL_COST from CHAIN_MONTH
+                    chartData.dataCost.push(parseAmount(row.TOTAL_COST));
                 });
+
             } else if (logData.length > 0) {
                 const grouped = {};
                 logData.forEach(row => {
                     const date = row.TIME || 'Unknown';
-                    if (!grouped[date]) grouped[date] = { in: 0, net: 0 };
+                    if (!grouped[date]) grouped[date] = { in: 0, net: 0, cost: 0 };
                     grouped[date].in += parseAmount(row.IN);
                     grouped[date].net += parseAmount(row.NET);
+                    grouped[date].cost += parseAmount(row.COST);
                 });
                 chartData.labels = Object.keys(grouped);
                 chartData.dataIn = Object.values(grouped).map(v => v.in);
                 chartData.dataNet = Object.values(grouped).map(v => v.net);
+                chartData.dataCost = Object.values(grouped).map(v => v.cost);
             }
 
             if (chart) chart.destroy();
@@ -542,6 +547,17 @@
                     data: chartData.dataNet,
                     borderColor: 'rgb(59, 130, 246)',
                     backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                    tension: 0.4,
+                    fill: true
+                });
+            }
+
+            if (chartData.dataCost.length > 0) {
+                datasets.push({
+                    label: 'Pengeluaran (COST)',
+                    data: chartData.dataCost,
+                    borderColor: 'rgb(239, 68, 68)',
+                    backgroundColor: 'rgba(239, 68, 68, 0.1)',
                     tension: 0.4,
                     fill: true
                 });
@@ -581,11 +597,11 @@
                 <tr class="hover:bg-gray-50 transition duration-150">
                     ${headers.map(h => {
                         const val = row[h] || '';
-                        const isAmount = ['IN', 'CONST', 'NET'].includes(h);
+                        const isAmount = ['IN', 'COST', 'NET'].includes(h);
                         const isDate = h === 'TIME';
                         const amountVal = parseAmount(val);
                         const colorClass = h === 'IN' ? 'text-green-600' : 
-                                         h === 'CONST' ? 'text-red-600' : 
+                                         h === 'COST' ? 'text-red-600' : 
                                          h === 'NET' ? 'text-blue-600' : 'text-gray-900';
                         const displayVal = isAmount ? formatRupiah(amountVal) : 
                                           isDate ? dateToJSDate(val) : val;
