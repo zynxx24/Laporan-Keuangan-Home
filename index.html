@@ -258,6 +258,22 @@
             }
         }
 
+        function sortPengeluaranByDate(data) {
+            if (!data || data.length === 0) return [];
+            
+            return [...data].sort((a, b) => {
+                if (!a.TIME && !b.TIME) return 0;
+                if (!a.TIME) return 1;
+                if (!b.TIME) return -1;
+                
+                const dateA = parseFloat(a.TIME);
+                const dateB = parseFloat(b.TIME);
+                
+                // Sort descending (terbaru di atas)
+                return dateB - dateA;
+            });
+        }
+
         function switchView(view) {
             currentView = view;
             
@@ -318,73 +334,72 @@
             container.innerHTML = html;
         }
 
-       function renderMonthlyChain() {
-        const container = document.getElementById('monthlyChainContent');
-        if (monthData.length === 0) {
-            container.innerHTML = '<p class="text-gray-500 text-center py-8">Tidak ada data monthly tersedia</p>';
-            return;
-        }
-        
-        // Ubah dari flex horizontal ke vertical
-        let html = '<div class="flex flex-col gap-4 items-center py-4">';
-        
-        monthData.forEach((row, idx) => {
-            const totalNet = parseAmount(row.TOTAL_NET);
-            const totalIn = parseAmount(row.TOTAL_IN);
-            const totalConst = parseAmount(row.TOTAL_COST);
-            const time = dateToJSDate(row.TIME || 'Month ' + (idx + 1));
-            const isNegative = totalNet < 0;
-            const bgClass = isNegative ? 'bg-gradient-to-br from-red-400 to-red-600' : 'bg-gradient-to-br from-green-400 to-green-600';
+        function renderMonthlyChain() {
+            const container = document.getElementById('monthlyChainContent');
+            if (monthData.length === 0) {
+                container.innerHTML = '<p class="text-gray-500 text-center py-8">Tidak ada data monthly tersedia</p>';
+                return;
+            }
             
-            html += `
-                <div class="chain-block-vertical relative w-full max-w-md">
-                    <div class="${bgClass} text-white p-6 rounded-xl shadow-lg">
-                        <div class="text-lg font-bold mb-3">${time}</div>
-                        <div class="space-y-2 text-sm">
-                            <div class="flex justify-between">
-                                <span>💰 IN:</span>
-                                <span class="font-semibold">${formatRupiah(totalIn)}</span>
-                            </div>
-                            <div class="flex justify-between">
-                                <span>💸 OUT:</span>
-                                <span class="font-semibold">${formatRupiah(totalConst)}</span>
-                            </div>
-                            <div class="border-t border-white/30 pt-2 mt-2 flex justify-between">
-                                <span>📊 NET:</span>
-                                <span class="font-bold">${formatRupiah(totalNet)}</span>
+            let html = '<div class="flex flex-col gap-4 items-center py-4">';
+            
+            monthData.forEach((row, idx) => {
+                const totalNet = parseAmount(row.TOTAL_NET);
+                const totalIn = parseAmount(row.TOTAL_IN);
+                const totalCost = parseAmount(row.TOTAL_COST);
+                const time = dateToJSDate(row.TIME || 'Month ' + (idx + 1));
+                const isNegative = totalNet < 0;
+                const bgClass = isNegative ? 'bg-gradient-to-br from-red-400 to-red-600' : 'bg-gradient-to-br from-green-400 to-green-600';
+                
+                html += `
+                    <div class="chain-block-vertical relative w-full max-w-md">
+                        <div class="${bgClass} text-white p-6 rounded-xl shadow-lg">
+                            <div class="text-lg font-bold mb-3">${time}</div>
+                            <div class="space-y-2 text-sm">
+                                <div class="flex justify-between">
+                                    <span>💰 IN:</span>
+                                    <span class="font-semibold">${formatRupiah(totalIn)}</span>
+                                </div>
+                                <div class="flex justify-between">
+                                    <span>💸 OUT:</span>
+                                    <span class="font-semibold">${formatRupiah(totalCost)}</span>
+                                </div>
+                                <div class="border-t border-white/30 pt-2 mt-2 flex justify-between">
+                                    <span>📊 NET:</span>
+                                    <span class="font-bold">${formatRupiah(totalNet)}</span>
+                                </div>
                             </div>
                         </div>
+                        ${idx < monthData.length - 1 ? `
+                            <div class="flex justify-center py-2">
+                                <div class="text-3xl" style="color: ${isNegative ? 'rgb(220, 38, 38)' : 'rgb(34, 197, 94)'}">↓</div>
+                            </div>
+                        ` : ''}
                     </div>
-                    ${idx < monthData.length - 1 ? `
-                        <div class="flex justify-center py-2">
-                            <div class="text-3xl" style="color: ${isNegative ? 'rgb(220, 38, 38)' : 'rgb(34, 197, 94)'}">↓</div>
-                        </div>
-                    ` : ''}
-                </div>
-            `;
-        });
-        
-        html += '</div>';
-        container.innerHTML = html;
-    }
+                `;
+            });
+            
+            html += '</div>';
+            container.innerHTML = html;
+        }
 
         function renderCategoryView() {
             if (logData.length === 0) return;
 
             // Group by TYPE
             const categoryData = {};
-            let totalConst = 0;
+            let totalCost = 0;
             
             logData.forEach(row => {
                 const type = row.TYPE || 'LAINNYA';
                 if (!categoryData[type]) {
-                    categoryData[type] = { in: 0, const: 0, net: 0, count: 0 };
+                    categoryData[type] = { in: 0, cost: 0, net: 0, count: 0 };
                 }
                 categoryData[type].in += parseAmount(row.IN);
-                categoryData[type].const += parseAmount(row.COST);
+                categoryData[type].cost += parseAmount(row.COST);
                 categoryData[type].net += parseAmount(row.NET);
                 categoryData[type].count++;
-                totalConst += parseAmount(row.COST);
+                totalCost += parseAmount(row.COST);
             });
 
             // Render pie chart with percentages
@@ -392,7 +407,7 @@
             if (categoryChart) categoryChart.destroy();
 
             const categories = Object.keys(categoryData);
-            const constValues = categories.map(c => categoryData[c].const);
+            const costValues = categories.map(c => categoryData[c].cost);
             
             const colors = [
                 'rgb(239, 68, 68)', 'rgb(59, 130, 246)', 'rgb(34, 197, 94)',
@@ -405,7 +420,7 @@
                 data: {
                     labels: categories,
                     datasets: [{
-                        data: constValues,
+                        data: costValues,
                         backgroundColor: colors,
                         borderWidth: 2,
                         borderColor: '#fff'
@@ -419,18 +434,9 @@
                             callbacks: {
                                 label: (context) => {
                                     const value = context.parsed;
-                                    const percentage = ((value / totalConst) * 100).toFixed(1);
+                                    const percentage = ((value / totalCost) * 100).toFixed(1);
                                     return `${context.label}: ${formatRupiah(value)} (${percentage}%)`;
                                 }
-                            }
-                        },
-                        datalabels: {
-                            display: true,
-                            color: '#fff',
-                            font: { weight: 'bold', size: 14 },
-                            formatter: (value, context) => {
-                                const percentage = ((value / totalConst) * 100).toFixed(1);
-                                return percentage + '%';
                             }
                         }
                     }
@@ -443,13 +449,13 @@
             
             categories.forEach((cat, idx) => {
                 const data = categoryData[cat];
-                const percentage = ((data.const / totalConst) * 100).toFixed(1);
+                const percentage = ((data.cost / totalCost) * 100).toFixed(1);
                 
                 statsHtml += `
                     <div class="p-4 bg-gray-50 rounded-lg border-l-4 relative" style="border-color: ${colors[idx]}">
                         <div class="absolute -top-3 -right-3 bg-white shadow-lg rounded-lg px-3 py-2 border-2" style="border-color: ${colors[idx]}">
                             <div class="text-center">
-                                <div class="text-lg font-bold" style="color: ${colors[idx]}">${formatRupiah(data.const)}</div>
+                                <div class="text-lg font-bold" style="color: ${colors[idx]}">${formatRupiah(data.cost)}</div>
                                 <div class="text-xs font-semibold text-gray-600">${percentage}%</div>
                             </div>
                         </div>
@@ -464,7 +470,7 @@
                             </div>
                             <div>
                                 <div class="text-xs text-gray-500">OUT</div>
-                                <div class="font-semibold text-red-600">${formatRupiah(data.const)}</div>
+                                <div class="font-semibold text-red-600">${formatRupiah(data.cost)}</div>
                             </div>
                             <div>
                                 <div class="text-xs text-gray-500">NET</div>
@@ -486,11 +492,11 @@
             document.getElementById('tableSection').classList.remove('hidden');
 
             const totalIn = logData.reduce((sum, row) => sum + parseAmount(row.IN), 0);
-            const totalConst = logData.reduce((sum, row) => sum + parseAmount(row.COST), 0);
+            const totalCost = logData.reduce((sum, row) => sum + parseAmount(row.COST), 0);
             const totalNet = logData.reduce((sum, row) => sum + parseAmount(row.NET), 0);
 
             document.getElementById('totalIncome').textContent = formatRupiah(totalIn);
-            document.getElementById('totalExpense').textContent = formatRupiah(totalConst);
+            document.getElementById('totalExpense').textContent = formatRupiah(totalCost);
             document.getElementById('netIncome').textContent = formatRupiah(totalNet);
             document.getElementById('totalTransactions').textContent = logData.length;
 
@@ -505,13 +511,9 @@
 
             if (monthData.length > 0) {
                 monthData.forEach(row => {
-                    // time in format MM/YYYY
                     chartData.labels.push(dateToJSDate(row.TIME).split('/').slice(1).join('/') || 'Month');
-                    // Use TOTAL_IN and TOTAL_NET from CHAIN_MONTH
                     chartData.dataIn.push(parseAmount(row.TOTAL_IN));
-                    // Use TOTAL_NET from CHAIN_MONTH
                     chartData.dataNet.push(parseAmount(row.TOTAL_NET));
-                    // use TOTAL_COST from CHAIN_MONTH
                     chartData.dataCost.push(parseAmount(row.TOTAL_COST));
                 });
 
@@ -590,27 +592,29 @@
             const headers = Object.keys(logData[0]);
 
             headerRow.innerHTML = headers.map(h => 
-                `<th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">${h}</th>`
+                `<th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">${h.replace(/_/g, ' ').replace(/\w\S*/g, w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())}</th>`
             ).join('');
 
-            tbody.innerHTML = logData.map((row) => `
-                <tr class="hover:bg-gray-50 transition duration-150">
-                    ${headers.map(h => {
-                        const val = row[h] || '';
-                        const isAmount = ['IN', 'COST', 'NET'].includes(h);
-                        const isDate = h === 'TIME';
-                        const amountVal = parseAmount(val);
-                        const colorClass = h === 'IN' ? 'text-green-600' : 
-                                         h === 'COST' ? 'text-red-600' : 
-                                         h === 'NET' ? 'text-blue-600' : 'text-gray-900';
-                        const displayVal = isAmount ? formatRupiah(amountVal) : 
-                                          isDate ? dateToJSDate(val) : val;
-                        return `<td class="px-6 py-4 whitespace-nowrap text-sm ${isAmount ? 'font-semibold ' + colorClass : 'text-gray-900'}">
-                            ${displayVal}
-                        </td>`;
-                    }).join('')}
-                </tr>
-            `).join('');
+            function renderTableCell(h, row) {
+                const val = row[h] || '';
+                const isAmount = ['IN', 'COST', 'NET'].includes(h);
+                const isDate = h === 'TIME';
+                const amountVal = parseAmount(val);
+                const colorClass = h === 'IN' ? 'text-green-600' : 
+                                 h === 'COST' ? 'text-red-600' : 
+                                 h === 'NET' ? 'text-blue-600' : 'text-gray-900';
+                const displayVal = isAmount ? formatRupiah(amountVal) : 
+                                  isDate ? dateToJSDate(val) : val;
+                return `<td class="px-6 py-4 whitespace-nowrap text-sm ${isAmount ? 'font-semibold ' + colorClass : 'text-gray-900'}">
+                    ${displayVal}
+                </td>`;
+            }
+
+            const sortedData = sortPengeluaranByDate(logData);
+
+            tbody.innerHTML = sortedData.map(row => 
+                `<tr>${headers.map(h => renderTableCell(h, row)).join('')}</tr>`
+            ).join('');
         }
 
         document.getElementById('searchInput').addEventListener('input', (e) => {
